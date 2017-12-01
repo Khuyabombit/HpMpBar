@@ -2,6 +2,8 @@ local HpMpBar = {}
 HpMpBar.Identity = "HpMpBar"
 HpMpBar.LastBayBack = {}
 HpMpBar.UltimateTime = {}
+HpMpBar.TpTime = {}
+HpMpBar.TpCooldown = {}
 HpMpBar.Font = Renderer.LoadFont("Arial", Config.ReadInt("HpMpBar", "Font", 10), Enum.FontWeight.BOLD)
 HpMpBar.FontSmall = Renderer.LoadFont("Arial", Config.ReadInt("HpMpBar", "Font", 12), Enum.FontWeight.BOLD)
 HpMpBar.Font1 = Renderer.LoadFont("Arial", Config.ReadInt("HpMpBar", "Font1", 14), Enum.FontWeight.BOLD)
@@ -13,15 +15,14 @@ local gem_icon_h = Renderer.LoadImage("resource/flash3/images/items/gem.png")
 local smk_icon_h = Renderer.LoadImage("resource/flash3/images/items/smoke_of_deceit.png")
 local aeg_icon_h = Renderer.LoadImage("resource/flash3/images/items/aegis.png")
 local dst_icon_h = Renderer.LoadImage("resource/flash3/images/items/dust.png")
-local cbr_icon_h = Renderer.LoadImage("resource/flash3/images/items/combo_breaker.png")
---Renderer.DrawImage(ult_icon_h, x - 10, y - 20, 20, 20)
+local aen_icon_h = Renderer.LoadImage("resource/flash3/images/items/aeon_disk.png")
 HpMpBar.Locale = {
 	["name"] = {
 		["english"] = "HpMpBar"
 	},
 	["desc"] = {
-		["english"] = "HpMpBar v0.1",
-		["russian"] = "HpMpBar v0.1"
+		["english"] = "HpMpBar v0.2",
+		["russian"] = "HpMpBar v0.2"
 	},
 	["bary"] = {
 		["english"] = "Height in percent",
@@ -96,11 +97,15 @@ HpMpBar.Locale = {
 function HpMpBar.OnGameStart()
 	HpMpBar.LastBayBack = {}
 	HpMpBar.UltimateTime = {}
+	HpMpBar.TpTime = {}
+	HpMpBar.TpCooldown = {}
 end
 
 function HpMpBar.OnGameEnd()
 	HpMpBar.LastBayBack = {}
 	HpMpBar.UltimateTime = {}
+	HpMpBar.TpTime = {}
+	HpMpBar.TpCooldown = {}
 end
 
 local Monitor = {
@@ -114,7 +119,7 @@ function HpMpBar.GetSize()
 	local r =  w / h
 	local m = "3"
 	if math.floor(r * 10) / 10 == 1.6 then
-		m = "10"	
+		m = "10"
 	elseif math.floor(r * 10) / 10 == 1.7 then
 		m = "9"
 	elseif math.floor(r * 10) / 10 == 2.1 then
@@ -130,7 +135,7 @@ function HpMpBar.GetHeroPos(Unit)
 	local r =  w / h
 	local m = "3"
 	if math.floor(r * 10) / 10 == 1.6 then
-		m = "10"	
+		m = "10"
 	elseif math.floor(r * 10) / 10 == 1.7 then
 		m = "9"
 	elseif math.floor(r * 10) / 10 == 2.1 then
@@ -162,134 +167,25 @@ function HpMpBar.GetHeroPosCenterX(Unit)
 	x = x + math.floor(HpMpBar.GetSize() / 2)
 	return x, y
 end
-local paint_buffer = {}
-function HpMpBar.DrawCircle2D(X1, Y1, R, painted)
-	local x = 0
-	local y = R
-	local delta = 1 - 2 * R
-	local error = 0
-	while y >= 0 do
-		if painted then
-			if not painted[X1 + x] then
-				painted[X1 + x] = {}
-			end
-			if not painted[X1 - x] then
-				painted[X1 - x] = {}
-			end
-			
-			painted[X1 + x][Y1 + y] = true
-			painted[X1 + x][Y1 - y] = true
-			painted[X1 - x][Y1 + y] = true
-			painted[X1 - x][Y1 - y] = true
-		end
-		Renderer.DrawPixel(X1 + x, Y1 + y)
-		Renderer.DrawPixel(X1 + x, Y1 - y)
-		Renderer.DrawPixel(X1 - x, Y1 + y)
-		Renderer.DrawPixel(X1 - x, Y1 - y)
-		error = 2 * (delta + y) - 1
-		if not ((delta < 0) and (error <= 0)) then
-			error = 2 * (delta - x) - 1
-			if not ((delta > 0) and (error > 0)) then
-				x = x + 1
-				delta = delta + 2 * (x - y)
-				y = y - 1
+
+function HpMpBar.ItemState(Unit, Item)
+	for i = 0, 12 do
+		local tmp_item = NPC.GetItemByIndex(Unit, i)
+		if tmp_item and Ability.GetName(tmp_item) == Item then
+			if i >= 0 and i < 6 then
+				return 0
+			elseif i < 9 then
+				return 1
 			else
-				y = y - 1
-				delta = delta + 1 - 2 * y
+				return 2
 			end
-		else
-			x = x + 1
-			delta = delta + 2 * x + 1
 		end
 	end
-end
-
-function HpMpBar.DrawLine(x1, y1, x2, y2, painted)
-	if x1 ~= x1 or y1 ~= y1 or x2 ~= x2 or y2 ~= y2 then -- is bad
-		--Log.Write("draw error " .. GameRules.GetGameTime() - GameRules.GetGameStartTime())
-		return
-	end
-	local deltaX = math.abs(x2 - x1)
-	local deltaY = math.abs(y2 - y1)
-	local signX = x1 < x2 and 1 or -1
-	local signY = y1 < y2 and 1 or -1
-	
-	local error = deltaX - deltaY
-	if painted then
-		if not painted[x2] then
-			painted[x2] = {}
-		end
-		
-		painted[x2][y2] = true
-	end
-	Renderer.DrawPixel(x2, y2)
-	while x1 ~= x2 or y1 ~= y2 do
-		if painted then
-			if not painted[x1] then
-				painted[x1] = {}
-			end
-			
-			painted[x1][y1] = true
-		end
-		Renderer.DrawPixel(x1, y1)
-		local error2 = error * 2
-		
-		if error2 > -deltaY then
-			error = error - deltaY
-			x1 = x1 + signX
-		end
-		if error2 < deltaX then
-			error = error + deltaX
-			y1 = y1 + signY
-		end
-	end
-end
-
-local paint_level = 0
-function HpMpBar.FillArea2D(X1, Y1, painted)
-	paint_level = paint_level + 1
-	if paint_level > 1000 then
-		return
-	end
-	if not painted[X1] then
-		painted[X1] = {}
-	end
-	painted[X1][Y1] = true
-	Renderer.DrawPixel(X1, Y1)
-	
-	if not painted[X1 - 1] then
-		painted[X1 - 1] = {}
-	end
-	if not painted[X1 - 1][Y1] then
-		painted[X1 - 1][Y1] = true
-		HpMpBar.FillArea2D(X1 - 1, Y1, painted)
-	end
-	if not painted[X1 + 1] then
-		painted[X1 + 1] = {}
-	end
-	if not painted[X1 + 1][Y1] then
-		painted[X1 + 1][Y1] = true
-		HpMpBar.FillArea2D(X1 + 1, Y1, painted)
-	end
-
-	if not painted[X1][Y1 - 1] then
-		painted[X1][Y1 - 1] = true
-		HpMpBar.FillArea2D(X1, Y1 - 1, painted)
-	end
-	if not painted[X1][Y1 + 1] then
-		painted[X1][Y1 + 1] = true
-		HpMpBar.FillArea2D(X1, Y1 + 1, painted)
-	end
-	paint_level = paint_level - 1
 end
 
 local old_scale
 local old_font_off
 function HpMpBar.OnDraw()
-	if not Engine.IsInGame() then
-		return
-	end
-	
 	if GUI == nil then
 		return
 	end
@@ -314,9 +210,13 @@ function HpMpBar.OnDraw()
 	if not GUI.IsEnabled(HpMpBar.Identity) then
 		return
 	end
-	
+
+	if not Engine.IsInGame() then
+		return
+	end
+
 	local myHero = Heroes.GetLocal()
-	
+
 	local scale = tonumber(GUI.Get(HpMpBar.Identity .. "bary")) / 100
 
 	local fontoff = GUI.Get(HpMpBar.Identity .. "fontoff")
@@ -325,7 +225,7 @@ function HpMpBar.OnDraw()
 		HpMpBar.FontSmall = Renderer.LoadFont("Arial", math.floor((12 + fontoff) * scale) , Enum.FontWeight.BOLD)
 		HpMpBar.Font1 = Renderer.LoadFont("Arial", math.floor((14 + fontoff) * scale) , Enum.FontWeight.BOLD)
 	end
-	
+
 	old_scale = scale
 	old_font_off = fontoff
 	for _, Unit in pairs(Heroes.GetAll()) do
@@ -337,15 +237,47 @@ function HpMpBar.OnDraw()
 
 			local Mp, MpMax = NPC.GetMana(Unit), NPC.GetMaxMana(Unit)
 			local MpPercent = Mp / MpMax
-			
+
 			local alpha = 255
-			
+
 			local bayback_cd = HpMpBar.LastBayBack[Hero.GetPlayerID(Unit)]
 			local bayback_cd_p = 0
 			if bayback_cd then
 				bayback_cd_p = (bayback_cd + 480 - GameRules.GetGameTime()) / 480
 			end
 
+			local tp_cooldown
+			if NPC.HasItem(Unit, "item_tpscroll", false) then
+				local tmp_item = NPC.GetItem(Unit, "item_tpscroll", false)
+				if tmp_item ~= nil then
+					if Ability.GetCooldownLength(tmp_item) ~= 0 then
+						HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] = Ability.GetCooldownLength(tmp_item)
+					end
+					if not HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] then
+						HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] = 0
+					end
+					local time_last_use
+					if not NPC.IsDormant(Unit) then
+						HpMpBar.TpTime[Hero.GetPlayerID(Unit)] = GameRules.GetGameTime() - (HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] -  Ability.GetCooldown(tmp_item))
+						tp_cooldown = Ability.GetCooldown(tmp_item)
+					else
+						if not HpMpBar.TpTime[Hero.GetPlayerID(Unit)] then
+							HpMpBar.TpTime[Hero.GetPlayerID(Unit)] = 0
+						end
+						if GameRules.GetGameTime() - HpMpBar.TpTime[Hero.GetPlayerID(Unit)] > 0 then
+							tp_cooldown = math.ceil( HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] - (GameRules.GetGameTime() - HpMpBar.TpTime[Hero.GetPlayerID(Unit)]))
+						else
+							tp_cooldown = 0
+						end
+					end
+				end
+			elseif HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] and HpMpBar.TpTime[Hero.GetPlayerID(Unit)] then
+				if GameRules.GetGameTime() - HpMpBar.TpTime[Hero.GetPlayerID(Unit)] > 0 then
+					tp_cooldown = math.ceil( HpMpBar.TpCooldown[Hero.GetPlayerID(Unit)] - (GameRules.GetGameTime() - HpMpBar.TpTime[Hero.GetPlayerID(Unit)]))
+				else
+					tp_cooldown = 0
+				end
+			end
 			local ultimate_cd
 			local ultimate_cd_time
 			local have_mana_ultimate = false
@@ -380,10 +312,10 @@ function HpMpBar.OnDraw()
 				tmp_ability = NPC.GetAbilityByIndex(Unit, i)
 			end
 			local bary = math.floor(8 * scale)
-			
+
 			local center_x, center_y = x_center - math.ceil(HpMpBar.GetSize() / 4), y_center + math.floor(bary * 2.5)
 			local center_x_r, center_y_r = x_center + math.ceil(HpMpBar.GetSize() / 4), y_center + math.floor(bary * 2.5)
-			
+
 			Renderer.SetDrawColor(0, 100, 0, alpha)
 			Renderer.DrawFilledRect(x + math.floor((HpMpBar.GetSize() - 4) * HpPercent), y, HpMpBar.GetSize() - 4 - math.floor((HpMpBar.GetSize() - 4) * HpPercent), bary)
 			if myHero and Entity.IsSameTeam(myHero, Unit) and NPC.IsVisible(Unit) then
@@ -393,14 +325,14 @@ function HpMpBar.OnDraw()
 			end
 			Renderer.DrawFilledRect(x, y, math.floor((HpMpBar.GetSize() - 4) * HpPercent), bary)
 			Renderer.SetDrawColor(255, 255, 255, alpha)
-			
+
 			if bayback_cd_p <= 0 and not Input.IsKeyDown(Enum.ButtonCode.KEY_LALT) and GUI.IsEnabled(HpMpBar.Identity .. "baybackpanel") then
 				Renderer.SetDrawColor(255, 180, 0, alpha)
 				Renderer.DrawFilledRect(x - 1, y + bary * 2 - 2, HpMpBar.GetSize() - 2, 4)
 			end
-			
-			
-			
+
+
+
 			Renderer.SetDrawColor(0, 0, 100, alpha)
 			Renderer.DrawFilledRect(x + math.floor((HpMpBar.GetSize() - 4) * MpPercent), y + bary, HpMpBar.GetSize() - 4 - math.floor((HpMpBar.GetSize() - 4) * MpPercent), bary)
 			Renderer.SetDrawColor(0, 0, 255, alpha)
@@ -423,7 +355,7 @@ function HpMpBar.OnDraw()
 					Renderer.DrawTextCentered(HpMpBar.FontSmall, x_center, y_center + bary + math.floor(5 * scale) - 1, Mp, 0)
 				end
 			end
-			
+
 			if Input.IsKeyDown(Enum.ButtonCode.KEY_LALT) then
 				if bayback_cd_p > 0 then
 					Renderer.DrawTextCentered(HpMpBar.Font, center_x, center_y, math.floor((bayback_cd + 480 - GameRules.GetGameTime()) / 60) .. ":" .. string.format("%02d", math.floor((bayback_cd + 480 - GameRules.GetGameTime()) % 60)), 1)
@@ -439,6 +371,20 @@ function HpMpBar.OnDraw()
 						Renderer.SetDrawColor(255, 255, 255, alpha)
 						Renderer.DrawTextCentered(HpMpBar.Font, center_x_r, center_y_r, math.floor(ultimate_cd_time / 60) .. ":" .. string.format("%02d", math.floor(ultimate_cd_time % 60)), 1)
 					end
+				end
+
+				if tp_cooldown then
+					local str = ""
+					if tp_cooldown == 0 and HpMpBar.ItemState(Unit, "item_tpscroll") == 1 then
+						str = str .. "bkpk"
+					elseif tp_cooldown > 0 then
+						str = str .. math.floor(tp_cooldown / 60) .. ":" .. string.format("%02d", math.floor(tp_cooldown % 60))
+					end
+					if NPC.HasItem(Unit, "item_tpscroll", true) then
+						str = str .. "tp"
+					end
+					Renderer.SetDrawColor(0, 255, 255, alpha)
+					Renderer.DrawTextCentered(HpMpBar.Font, center_x_r, center_y_r + 20, str, 1)
 				end
 			else
 				if ultimate_cd and ultimate_cd <= 0 then
@@ -471,8 +417,8 @@ function HpMpBar.OnDraw()
 					if NPC.HasItem(Unit, "item_dust", 1) then
 						Renderer.DrawImage(dst_icon_h, x, y + math.floor(bary * 2.2) + 40, math.floor((HpMpBar.GetSize() - 4) / 3), 20)
 					end
-					if NPC.HasItem(Unit, "item_combo_breaker", 1) then
-						Renderer.DrawImage(cbr_icon_h, x + math.floor((HpMpBar.GetSize() - 4) / 3), y + math.floor(bary * 2.2) + 40, math.floor((HpMpBar.GetSize() - 4) / 3), 20)
+					if NPC.HasItem(Unit, "item_aeon_disk", 1) then
+						Renderer.DrawImage(aen_icon_h, x + math.floor((HpMpBar.GetSize() - 4) / 3), y + math.floor(bary * 2.2) + 40, math.floor((HpMpBar.GetSize() - 4) / 3), 20)
 					end
 				end
 			end
@@ -484,6 +430,12 @@ function HpMpBar.OnChatEvent(chatEvent)
 	if chatEvent.type == 7 then
 		local _, PlayerID = next(chatEvent.players)
 		HpMpBar.LastBayBack[PlayerID] = GameRules.GetGameTime()
+	end
+end
+
+function HpMpBar.OnParticleCreate(particle)
+	if particle.name and particle.name == "teleport_end" then
+		HpMpBar.TpTime[Hero.GetPlayerID(particle.entityForModifiers)] = GameRules.GetGameTime()
 	end
 end
 
